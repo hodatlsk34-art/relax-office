@@ -1,5 +1,5 @@
 // Relax Office – service worker: lưu sẵn để dùng khi không có mạng
-const CACHE = "relax-office-v1";
+const CACHE = "relax-office-v2";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./lucide.min.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/favicon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });

@@ -471,7 +471,7 @@ body.reduce *,body.reduce *::before,body.reduce *::after{animation-duration:.01m
             <div><div class="eyebrow" style="margin-bottom:8px">Hẹn giờ tắt</div><div class="chips" id="sleepChips"></div></div>
           </div>
           <div id="mixGroups" class="stack" style="gap:18px"></div>
-          <div class="note sun"><i data-lucide="info"></i><span>Trên iPhone, nếu không nghe thấy gì, hãy gạt tắt chế độ im lặng. Âm thanh trên web có thể dừng khi khóa màn hình, tùy máy.</span></div>
+          <div class="note sun"><i data-lucide="info"></i><span>Không nghe thấy tiếng? Kiểm tra: tăng âm lượng bằng nút cạnh máy, gạt tắt chế độ im lặng (iPhone), tắt kết nối Bluetooth không dùng tới, rồi bấm Phát lại một lần.</span></div>
         </div>
       </section>
 
@@ -630,9 +630,20 @@ function makeNoise(c,type){const n=Math.floor(c.sampleRate*6),b=c.createBuffer(2
  if(type==="brown"){const drift=d[n-1]-d[0];for(let i=0;i<n;i++)d[i]-=drift*i/n}
  const f=2000;for(let i=0;i<f;i++){const k=i/f;d[n-f+i]=d[n-f+i]*(1-k)+d[i]*k}}return b}
 function makeIR(c,sec){const n=Math.floor(c.sampleRate*sec),b=c.createBuffer(2,n,c.sampleRate);for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3)}return b}
+/* Mở khóa âm thanh cho iPhone/Android: phát một luồng im lặng qua thẻ <audio> để
+   âm thanh đi theo kênh "media" (không bị nút gạt im lặng của iPhone tắt mất). */
+let keepAlive=null;
+function silentWav(){const sr=8000,n=sr,b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  return URL.createObjectURL(new Blob([b],{type:"audio/wav"}))}
+function mediaChannelOn(){try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}
+  try{if(!keepAlive){keepAlive=document.createElement("audio");keepAlive.setAttribute("playsinline","");keepAlive.setAttribute("x-webkit-airplay","deny");keepAlive.loop=true;keepAlive.preload="auto";keepAlive.src=silentWav()}const pr=keepAlive.play();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}}
+function mediaChannelOff(){try{keepAlive&&keepAlive.pause()}catch(e){}}
+function unlockAudio(){const c=ac();if(!c)return;try{const s=c.createBufferSource();s.buffer=c.createBuffer(1,1,22050);s.connect(c.destination);s.start(0)}catch(e){}mediaChannelOn();if(!M.playing)setTimeout(()=>{if(!M.playing)mediaChannelOff()},1500)}
+["pointerdown","touchend","keydown"].forEach(ev=>document.addEventListener(ev,function once(){if(AU.ctx&&AU.ctx.state==="running")return;unlockAudio()},{capture:true,passive:true}));
 function ac(){
   if(!AU.ctx){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;const c=new C();AU.ctx=c;
-    AU.master=c.createGain();AU.master.gain.value=S.masterVol;const comp=c.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=3;AU.master.connect(comp);comp.connect(c.destination);
+    AU.master=c.createGain();AU.master.gain.value=S.masterVol;const comp=c.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=8;comp.knee.value=6;comp.attack.value=.005;comp.release.value=.25;AU.master.connect(comp);comp.connect(c.destination);
     ["white","pink","brown"].forEach(t=>AU.buf[t]=makeNoise(c,t));AU.ir=makeIR(c,2.8);AU.rev=c.createConvolver();AU.rev.buffer=AU.ir;const rg=gainN(c,.5);AU.rev.connect(rg);rg.connect(AU.master)}
   if(AU.ctx.state!=="running"){try{AU.ctx.resume()}catch(e){}}
   return AU.ctx}
@@ -651,33 +662,33 @@ const midi=m=>440*Math.pow(2,(m-69)/12);
 function pianoNote(L,f,t0,vol,rev){[[1,1],[2,.32],[3,.1],[4,.05]].forEach(([m,v])=>tone(L,{f:f*m,t0,a:.004,d:m===1?3:1.6,vol:vol*v,rev:rev,pan:(f>500?.2:-.2)}))}
 
 const SOUNDS=[
- {id:"rain",name:"Mưa rơi",cat:"nature",icon:"cloud-rain",g:1,build(L){const c=L.ctx;chain(noise(L,"pink"),filt(c,"highpass",500),filt(c,"lowpass",6500),gainN(c,.6),L.out);const g2=gainN(c,.1);chain(noise(L,"white"),filt(c,"bandpass",2600,.6),g2,L.out);lfo(L,g2.gain,.13,.04);L.every(25,110,()=>burst(L,{dur:rnd(.01,.03),f:rnd(1500,5000),ft:"bandpass",q:2,vol:rnd(.04,.14),pan:rnd(-.8,.8)}))}},
- {id:"storm",name:"Giông xa",cat:"nature",icon:"cloud-lightning",g:1,build(L){const c=L.ctx;chain(noise(L,"brown"),filt(c,"lowpass",700),gainN(c,.55),L.out);chain(noise(L,"pink"),filt(c,"highpass",300),filt(c,"lowpass",3500),gainN(c,.3),L.out);
+ {id:"rain",name:"Mưa rơi",cat:"nature",icon:"cloud-rain",g:4.6,build(L){const c=L.ctx;chain(noise(L,"pink"),filt(c,"highpass",500),filt(c,"lowpass",6500),gainN(c,.6),L.out);const g2=gainN(c,.1);chain(noise(L,"white"),filt(c,"bandpass",2600,.6),g2,L.out);lfo(L,g2.gain,.13,.04);L.every(25,110,()=>burst(L,{dur:rnd(.01,.03),f:rnd(1500,5000),ft:"bandpass",q:2,vol:rnd(.04,.14),pan:rnd(-.8,.8)}))}},
+ {id:"storm",name:"Giông xa",cat:"nature",icon:"cloud-lightning",g:1.5,build(L){const c=L.ctx;chain(noise(L,"brown"),filt(c,"lowpass",700),gainN(c,.55),L.out);chain(noise(L,"pink"),filt(c,"highpass",300),filt(c,"lowpass",3500),gainN(c,.3),L.out);
    L.every(14000,34000,()=>{const t=c.currentTime,s=c.createBufferSource();s.buffer=AU.buf.brown;const f=filt(c,"lowpass",130),g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(1.1,t+rnd(.2,.7));g.gain.exponentialRampToValueAtTime(.0001,t+rnd(4,7));chain(s,f,g,panN(c,rnd(-.6,.6)),L.out);s.start(t,Math.random()*4,8);burst(L,{dur:.4,f:2500,ft:"lowpass",vol:.12,a:.05})},6000)}},
- {id:"waves",name:"Sóng biển",cat:"nature",icon:"waves",g:1,build(L){const c=L.ctx;const g=gainN(c,.45);chain(noise(L,"brown"),filt(c,"lowpass",700),g,L.out);lfo(L,g.gain,.085,.4);const g2=gainN(c,.1);chain(noise(L,"pink"),filt(c,"highpass",1200),filt(c,"lowpass",5000),g2,L.out);lfo(L,g2.gain,.085,.09)}},
- {id:"wind",name:"Gió thổi",cat:"nature",icon:"wind",g:1,build(L){const c=L.ctx;const bp=filt(c,"bandpass",450,.7),g=gainN(c,.7);chain(noise(L,"brown"),bp,g,L.out);lfo(L,bp.frequency,.05,250);lfo(L,g.gain,.07,.3);const bp2=filt(c,"bandpass",1300,4);chain(noise(L,"pink"),bp2,gainN(c,.07),L.out);lfo(L,bp2.frequency,.11,500)}},
- {id:"stream",name:"Suối chảy",cat:"nature",icon:"droplets",g:1,build(L){const c=L.ctx;chain(noise(L,"white"),filt(c,"bandpass",1400,.4),gainN(c,.2),L.out);chain(noise(L,"pink"),filt(c,"highpass",3000),gainN(c,.06),L.out);L.every(80,320,()=>{const f=rnd(400,1200);tone(L,{f,f2:f*1.7,glide:.05,a:.003,d:.06,vol:.04,pan:rnd(-.7,.7)})})}},
- {id:"waterfall",name:"Thác nước",cat:"nature",icon:"mountain",g:1,build(L){const c=L.ctx;chain(noise(L,"brown"),filt(c,"lowpass",3000),gainN(c,.7),L.out);chain(noise(L,"pink"),filt(c,"highpass",800),gainN(c,.25),L.out)}},
- {id:"fire",name:"Lửa lò sưởi",cat:"nature",icon:"flame",g:1,build(L){const c=L.ctx;const g=gainN(c,.45);chain(noise(L,"brown"),filt(c,"lowpass",500),g,L.out);lfo(L,g.gain,.4,.12);L.every(30,230,()=>burst(L,{dur:rnd(.005,.03),f:rnd(1500,3500),vol:rnd(.04,.4),pan:rnd(-.5,.5)}))}},
- {id:"birds",name:"Chim hót",cat:"nature",icon:"bird",g:1,build(L){L.every(1200,4500,()=>{const n=Math.floor(rnd(2,6)),base=rnd(2200,4600),p=rnd(-.8,.8),up=Math.random()>.5;let t=0;for(let i=0;i<n;i++){tone(L,{f:base*rnd(.9,1.1),f2:base*(up?1.4:.7),glide:rnd(.06,.12),t0:t,a:.01,d:.08,vol:rnd(.05,.1),pan:p,rev:.25});t+=rnd(.1,.18)}},300)}},
- {id:"crickets",name:"Dế kêu",cat:"nature",icon:"moon-star",g:1,build(L){L.every(500,1100,()=>{const p=pick([-.6,.6,0]),f=rnd(4200,4700);for(let k=0;k<3;k++)tone(L,{f,t0:k*.05,a:.003,d:.03,vol:.035,pan:p})})}},
- {id:"chimes",name:"Chuông gió",cat:"nature",icon:"bell",g:1,build(L){const sc=[72,74,76,79,81,84,86,88];L.every(1500,5000,()=>{const n=Math.floor(rnd(1,4));for(let i=0;i<n;i++)tone(L,{f:midi(pick(sc)),t0:i*rnd(.15,.4),a:.003,d:2.6,vol:.04,pan:rnd(-.6,.6),rev:.6})},400)}},
- {id:"piano",name:"Piano nhẹ",cat:"music",icon:"music",g:1,build(L){const sc=[60,62,64,67,69,72,74,76,79];L.every(900,2600,()=>{const m=pick(sc);pianoNote(L,midi(m),0,.09,.55);if(Math.random()<.3)pianoNote(L,midi(m-12),.02,.06,.5);if(Math.random()<.2)pianoNote(L,midi(pick(sc)),rnd(.3,.6),.05,.5)},200)}},
- {id:"lofi",name:"Lo-fi chill",cat:"music",icon:"disc-3",g:1,build(L){const c=L.ctx,beat=60/72,bar=beat*4,chords=[[53,57,60,64],[52,55,59,62],[50,53,57,60],[48,52,55,59]],lp=filt(c,"lowpass",950);lp.connect(L.out);
+ {id:"waves",name:"Sóng biển",cat:"nature",icon:"waves",g:1.1,build(L){const c=L.ctx;const g=gainN(c,.45);chain(noise(L,"brown"),filt(c,"lowpass",700),g,L.out);lfo(L,g.gain,.085,.4);const g2=gainN(c,.1);chain(noise(L,"pink"),filt(c,"highpass",1200),filt(c,"lowpass",5000),g2,L.out);lfo(L,g2.gain,.085,.09)}},
+ {id:"wind",name:"Gió thổi",cat:"nature",icon:"wind",g:3.5,build(L){const c=L.ctx;const bp=filt(c,"bandpass",450,.7),g=gainN(c,.7);chain(noise(L,"brown"),bp,g,L.out);lfo(L,bp.frequency,.05,250);lfo(L,g.gain,.07,.3);const bp2=filt(c,"bandpass",1300,4);chain(noise(L,"pink"),bp2,gainN(c,.07),L.out);lfo(L,bp2.frequency,.11,500)}},
+ {id:"stream",name:"Suối chảy",cat:"nature",icon:"droplets",g:10,build(L){const c=L.ctx;chain(noise(L,"white"),filt(c,"bandpass",1400,.4),gainN(c,.2),L.out);chain(noise(L,"pink"),filt(c,"highpass",3000),gainN(c,.06),L.out);L.every(80,320,()=>{const f=rnd(400,1200);tone(L,{f,f2:f*1.7,glide:.05,a:.003,d:.06,vol:.04,pan:rnd(-.7,.7)})})}},
+ {id:"waterfall",name:"Thác nước",cat:"nature",icon:"mountain",g:1.3,build(L){const c=L.ctx;chain(noise(L,"brown"),filt(c,"lowpass",3000),gainN(c,.7),L.out);chain(noise(L,"pink"),filt(c,"highpass",800),gainN(c,.25),L.out)}},
+ {id:"fire",name:"Lửa lò sưởi",cat:"nature",icon:"flame",g:2.2,build(L){const c=L.ctx;const g=gainN(c,.45);chain(noise(L,"brown"),filt(c,"lowpass",500),g,L.out);lfo(L,g.gain,.4,.12);L.every(30,230,()=>burst(L,{dur:rnd(.005,.03),f:rnd(1500,3500),vol:rnd(.04,.4),pan:rnd(-.5,.5)}))}},
+ {id:"birds",name:"Chim hót",cat:"nature",icon:"bird",g:10,build(L){L.every(1200,4500,()=>{const n=Math.floor(rnd(2,6)),base=rnd(2200,4600),p=rnd(-.8,.8),up=Math.random()>.5;let t=0;for(let i=0;i<n;i++){tone(L,{f:base*rnd(.9,1.1),f2:base*(up?1.4:.7),glide:rnd(.06,.12),t0:t,a:.01,d:.08,vol:rnd(.05,.1),pan:p,rev:.25});t+=rnd(.1,.18)}},300)}},
+ {id:"crickets",name:"Dế kêu",cat:"nature",icon:"moon-star",g:25,build(L){L.every(500,1100,()=>{const p=pick([-.6,.6,0]),f=rnd(4200,4700);for(let k=0;k<3;k++)tone(L,{f,t0:k*.05,a:.003,d:.03,vol:.035,pan:p})})}},
+ {id:"chimes",name:"Chuông gió",cat:"nature",icon:"bell",g:12,build(L){const sc=[72,74,76,79,81,84,86,88];L.every(1500,5000,()=>{const n=Math.floor(rnd(1,4));for(let i=0;i<n;i++)tone(L,{f:midi(pick(sc)),t0:i*rnd(.15,.4),a:.003,d:2.6,vol:.04,pan:rnd(-.6,.6),rev:.6})},400)}},
+ {id:"piano",name:"Piano nhẹ",cat:"music",icon:"music",g:8,build(L){const sc=[60,62,64,67,69,72,74,76,79];L.every(900,2600,()=>{const m=pick(sc);pianoNote(L,midi(m),0,.09,.55);if(Math.random()<.3)pianoNote(L,midi(m-12),.02,.06,.5);if(Math.random()<.2)pianoNote(L,midi(pick(sc)),rnd(.3,.6),.05,.5)},200)}},
+ {id:"lofi",name:"Lo-fi chill",cat:"music",icon:"disc-3",g:3,build(L){const c=L.ctx,beat=60/72,bar=beat*4,chords=[[53,57,60,64],[52,55,59,62],[50,53,57,60],[48,52,55,59]],lp=filt(c,"lowpass",950);lp.connect(L.out);
    chain(noise(L,"pink"),filt(c,"highpass",1000),gainN(c,.012),L.out);let next=c.currentTime+.15,k=0;
    L.every(200,200,()=>{while(next<c.currentTime+.8){const t0=next-c.currentTime;chords[k%4].forEach(m=>tone(L,{f:midi(m),type:"triangle",t0,a:.08,hold:bar*.7,d:bar*.4,vol:.03,dest:lp}));
      for(let b=0;b<4;b++){const tb=t0+b*beat;if(b===0||b===2)tone(L,{f:110,f2:45,glide:.12,t0:tb,a:.003,d:.35,vol:.32});if(b===1||b===3)burst(L,{t0:tb,dur:.12,f:1800,ft:"bandpass",q:.8,vol:.06});burst(L,{t0:tb,dur:.03,f:7000,vol:.025});burst(L,{t0:tb+beat*.58,dur:.025,f:7000,vol:.018});if(Math.random()<.45)tone(L,{f:midi(pick([72,74,76,79,81])),t0:tb+beat*.5,a:.01,d:1.2,vol:.035,rev:.4,lp:2500})}
      next+=bar;k++}},0);L.every(150,600,()=>burst(L,{dur:.004,f:1500,vol:.03}))}},
- {id:"drone",name:"Ambient trôi",cat:"music",icon:"radio",g:1,build(L){const c=L.ctx,lp=filt(c,"lowpass",700),g=gainN(c,.12);lp.connect(g);g.connect(L.out);lfo(L,lp.frequency,.03,380);[[110,"triangle",0],[164.8,"sine",4],[220,"sine",-3],[329.6,"sine",2]].forEach(([f,t,dt])=>{const o=c.createOscillator();o.type=t;o.frequency.value=f;o.detune.value=dt;const og=gainN(c,.5);o.connect(og);og.connect(lp);lfo(L,og.gain,rnd(.02,.06),.3);o.start();L.src.push(o)})}},
- {id:"bowl",name:"Chuông xoay",cat:"music",icon:"circle",g:1,build(L){L.every(7000,13000,()=>{const f=pick([196,220,261.6]);[[1,.12,7],[2.72,.05,4],[5.1,.02,2.5]].forEach(([m,v,d])=>{tone(L,{f:f*m,a:.02,d,vol:v,rev:.5,pan:-.15});tone(L,{f:f*m*1.004,a:.02,d,vol:v*.6,rev:.5,pan:.15})})},200)}},
- {id:"white",name:"Ồn trắng",cat:"focus",icon:"audio-lines",g:1,build(L){const c=L.ctx;chain(noise(L,"white"),filt(c,"lowpass",9000),gainN(c,.22),L.out)}},
- {id:"pink",name:"Ồn hồng – dễ ngủ",cat:"focus",icon:"moon",g:1,build(L){const c=L.ctx;chain(noise(L,"pink"),filt(c,"lowpass",2500),gainN(c,.5),L.out)}},
- {id:"brown",name:"Ồn nâu – tập trung",cat:"focus",icon:"brain",g:1,build(L){const c=L.ctx;chain(noise(L,"brown"),filt(c,"lowpass",1200),gainN(c,.6),L.out)}},
- {id:"chatter",name:"Quán xá rì rầm",cat:"cafe",icon:"users",g:1,build(L){const c=L.ctx;const g=gainN(c,.45),g2=gainN(c,.1);chain(noise(L,"brown"),filt(c,"bandpass",450,.9),g,L.out);chain(noise(L,"pink"),filt(c,"bandpass",1100,1.5),g2,L.out);
+ {id:"drone",name:"Ambient trôi",cat:"music",icon:"radio",g:2.3,build(L){const c=L.ctx,lp=filt(c,"lowpass",700),g=gainN(c,.12);lp.connect(g);g.connect(L.out);lfo(L,lp.frequency,.03,380);[[110,"triangle",0],[164.8,"sine",4],[220,"sine",-3],[329.6,"sine",2]].forEach(([f,t,dt])=>{const o=c.createOscillator();o.type=t;o.frequency.value=f;o.detune.value=dt;const og=gainN(c,.5);o.connect(og);og.connect(lp);lfo(L,og.gain,rnd(.02,.06),.3);o.start();L.src.push(o)})}},
+ {id:"bowl",name:"Chuông xoay",cat:"music",icon:"circle",g:4.5,build(L){L.every(7000,13000,()=>{const f=pick([196,220,261.6]);[[1,.12,7],[2.72,.05,4],[5.1,.02,2.5]].forEach(([m,v,d])=>{tone(L,{f:f*m,a:.02,d,vol:v,rev:.5,pan:-.15});tone(L,{f:f*m*1.004,a:.02,d,vol:v*.6,rev:.5,pan:.15})})},200)}},
+ {id:"white",name:"Ồn trắng",cat:"focus",icon:"audio-lines",g:5,build(L){const c=L.ctx;chain(noise(L,"white"),filt(c,"lowpass",9000),gainN(c,.22),L.out)}},
+ {id:"pink",name:"Ồn hồng – dễ ngủ",cat:"focus",icon:"moon",g:2.8,build(L){const c=L.ctx;chain(noise(L,"pink"),filt(c,"lowpass",2500),gainN(c,.5),L.out)}},
+ {id:"brown",name:"Ồn nâu – tập trung",cat:"focus",icon:"brain",g:1.6,build(L){const c=L.ctx;chain(noise(L,"brown"),filt(c,"lowpass",1200),gainN(c,.6),L.out)}},
+ {id:"chatter",name:"Quán xá rì rầm",cat:"cafe",icon:"users",g:5,build(L){const c=L.ctx;const g=gainN(c,.45),g2=gainN(c,.1);chain(noise(L,"brown"),filt(c,"bandpass",450,.9),g,L.out);chain(noise(L,"pink"),filt(c,"bandpass",1100,1.5),g2,L.out);
    L.every(250,700,()=>{const t=c.currentTime;g.gain.setTargetAtTime(rnd(.28,.65),t,.25);g2.gain.setTargetAtTime(rnd(.05,.16),t,.25)});L.every(2500,9000,()=>{const f=rnd(2600,3600),p=rnd(-.7,.7);tone(L,{f,a:.002,d:.5,vol:.05,pan:p,rev:.3});tone(L,{f:f*2.7,a:.002,d:.25,vol:.02,pan:p})})}},
- {id:"keyboard",name:"Đồng nghiệp gõ phím",cat:"cafe",icon:"keyboard",g:1,build(L){L.every(1500,4500,()=>{let t=0;const n=Math.floor(rnd(6,24)),p=rnd(-.5,.5);for(let i=0;i<n;i++){const big=Math.random()<.1;burst(L,{t0:t,dur:big?.03:.015,f:big?1800:3000,ft:"bandpass",q:1,vol:rnd(.08,.18),pan:p});burst(L,{t0:t,dur:.03,type:"brown",f:300,ft:"lowpass",vol:.12,pan:p});t+=rnd(.06,.2)}},500)}},
- {id:"clock",name:"Đồng hồ tích tắc",cat:"cafe",icon:"clock",g:1,build(L){let k=0;L.every(1000,1000,()=>{k++;burst(L,{dur:.02,f:k%2?3600:3000,ft:"bandpass",q:8,vol:.3});tone(L,{f:k%2?1500:1300,a:.001,d:.02,vol:.025})},0)}},
- {id:"traffic",name:"Phố Sài Gòn (có còi)",cat:"cafe",icon:"bike",g:1,build(L){const c=L.ctx;const g=gainN(c,.45);chain(noise(L,"brown"),filt(c,"lowpass",180),g,L.out);lfo(L,g.gain,.06,.25);chain(noise(L,"pink"),filt(c,"bandpass",800,.5),gainN(c,.06),L.out);
+ {id:"keyboard",name:"Đồng nghiệp gõ phím",cat:"cafe",icon:"keyboard",g:10,build(L){L.every(1500,4500,()=>{let t=0;const n=Math.floor(rnd(6,24)),p=rnd(-.5,.5);for(let i=0;i<n;i++){const big=Math.random()<.1;burst(L,{t0:t,dur:big?.03:.015,f:big?1800:3000,ft:"bandpass",q:1,vol:rnd(.08,.18),pan:p});burst(L,{t0:t,dur:.03,type:"brown",f:300,ft:"lowpass",vol:.12,pan:p});t+=rnd(.06,.2)}},500)}},
+ {id:"clock",name:"Đồng hồ tích tắc",cat:"cafe",icon:"clock",g:20,build(L){let k=0;L.every(1000,1000,()=>{k++;burst(L,{dur:.02,f:k%2?3600:3000,ft:"bandpass",q:8,vol:.3});tone(L,{f:k%2?1500:1300,a:.001,d:.02,vol:.025})},0)}},
+ {id:"traffic",name:"Phố Sài Gòn (có còi)",cat:"cafe",icon:"bike",g:1.5,build(L){const c=L.ctx;const g=gainN(c,.45);chain(noise(L,"brown"),filt(c,"lowpass",180),g,L.out);lfo(L,g.gain,.06,.25);chain(noise(L,"pink"),filt(c,"bandpass",800,.5),gainN(c,.06),L.out);
    L.every(3000,8000,()=>{const t=c.currentTime,o=c.createOscillator();o.type="sawtooth";o.frequency.setValueAtTime(rnd(70,110),t);o.frequency.linearRampToValueAtTime(rnd(60,90),t+3);const f=filt(c,"lowpass",420),gg=c.createGain();gg.gain.setValueAtTime(.0001,t);gg.gain.exponentialRampToValueAtTime(.07,t+1.5);gg.gain.exponentialRampToValueAtTime(.0001,t+3);const p=panN(c,-1);const dir=Math.random()<.5?1:-1;if(p.pan){p.pan.setValueAtTime(-dir,t);p.pan.linearRampToValueAtTime(dir,t+3)}chain(o,f,gg,p,L.out);o.start(t);o.stop(t+3.1)});
    L.every(15000,40000,()=>{const p=rnd(-.8,.8);[0,.2].forEach(t0=>{tone(L,{f:420,type:"square",t0,a:.005,hold:.1,d:.05,vol:.012,pan:p,lp:2000});tone(L,{f:530,type:"square",t0,a:.005,hold:.1,d:.05,vol:.01,pan:p,lp:2000})})},9000)}}
 ];
@@ -695,8 +706,9 @@ function stopLayer(id){const L=AU.layers[id];if(!L)return;delete AU.layers[id];L
 const M={mix:{},playing:false,title:"",src:null,sleepEnd:0};
 function applyMix(){if(!AU.ctx)return;SOUNDS.forEach(s=>{const v=M.playing?(M.mix[s.id]||0):0,L=AU.layers[s.id];if(v>0){const LL=L||startLayer(s);LL.out.gain.setTargetAtTime(v*v*(s.g||1),AU.ctx.currentTime,.25)}else if(L)stopLayer(s.id)});syncUI()}
 function hasMix(){return Object.values(M.mix).some(v=>v>0)}
-function play(){if(!ac()){toast("Trình duyệt này chưa hỗ trợ phát âm thanh.");return}if(!hasMix()){toast("Chưa bật lớp âm nào. Chọn một bộ trộn có sẵn nhé.");return}M.playing=true;applyMix();mediaSession()}
-function pause(){M.playing=false;applyMix()}
+function play(){if(!ac()){toast("Trình duyệt này chưa hỗ trợ phát âm thanh.");return}if(!hasMix()){toast("Chưa bật lớp âm nào. Chọn một bộ trộn có sẵn nhé.");return}mediaChannelOn();M.playing=true;applyMix();mediaSession();
+  setTimeout(()=>{if(M.playing&&AU.ctx&&AU.ctx.state!=="running"){try{AU.ctx.resume()}catch(e){}toast("Trình duyệt đang chặn âm thanh. Chạm vào nút Phát thêm một lần nữa nhé.","Phát",()=>{AU.ctx.resume();play()},7000)}},800)}
+function pause(){M.playing=false;applyMix();mediaChannelOff()}
 function toggle(){M.playing?pause():play()}
 function setMix(mix,title,src){M.mix=Object.assign({},mix);M.title=title;M.src=src||{type:"mix"};play()}
 function stopAll(){M.playing=false;M.sleepEnd=0;applyMix();M.mix={};M.title="";M.src=null;syncUI()}
@@ -783,7 +795,7 @@ function shade(hex,amt){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255
 const live=new Set();let rafOn=false,t0=performance.now();
 function loop(now){rafOn=false;if(document.hidden||!live.size)return;const t=(now-t0)/1000;live.forEach(sc=>{if(sc.c.offsetParent!==null||sc.c.closest(".player")){sc.resize();sc.draw(reduced()?3:t)}});if(!reduced()){rafOn=true;requestAnimationFrame(loop)}}
 function kick(){if(!rafOn){rafOn=true;requestAnimationFrame(loop)}}
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)kick()});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){kick();if(M.playing&&AU.ctx&&AU.ctx.state!=="running"){try{AU.ctx.resume()}catch(e){}}}});
 function thumb(canvas,def){const sc=new Scene(canvas,def);requestAnimationFrame(()=>{sc.resize();sc.draw(4)});return sc}
 
 /* ================= Điều hướng ================= */
