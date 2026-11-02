@@ -1,0 +1,23 @@
+RELAX OFFICE – HƯỚNG DẪN ĐƯA LÊN MẠNG VÀ CÀI VÀO ĐIỆN THOẠI
+
+Thư mục này là toàn bộ ứng dụng (không cần máy chủ, không cần cơ sở dữ liệu).
+Để cài được lên điện thoại, ứng dụng phải chạy trên một địa chỉ https.
+
+CÁCH NHANH NHẤT (2 phút, miễn phí) – Netlify Drop
+ 1. Mở https://app.netlify.com/drop trên máy tính.
+ 2. Kéo thả cả thư mục "deploy" (hoặc file zip) vào trang.
+ 3. Nhận đường link dạng https://ten-ngau-nhien.netlify.app → đổi tên trong Site settings nếu muốn.
+
+CÁCH KHÁC
+ - GitHub Pages: tạo repo, tải các file lên, bật Settings → Pages.
+ - Render (Static Site) hoặc Cloudflare Pages: kết nối repo GitHub chứa các file này,
+   Build command để trống, Publish directory là thư mục chứa index.html.
+ - Hosting của trường: tải nguyên thư mục lên một thư mục con có https.
+
+CÀI VÀO ĐIỆN THOẠI
+ - Android (Chrome): mở link → menu ⋮ → "Cài đặt ứng dụng" (hoặc bấm nút điện thoại trên thanh trên cùng).
+ - iPhone (Safari): mở link → nút Chia sẻ → "Thêm vào MH chính".
+ Sau lần mở đầu tiên, ứng dụng dùng được cả khi không có mạng.
+
+CẬP NHẬT PHIÊN BẢN
+ - Sửa file xong, đổi dòng CACHE = "relax-office-v1" trong sw.js thành v2, v3... rồi tải lên lại.

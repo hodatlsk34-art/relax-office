@@ -1,0 +1,23 @@
+{
+  "name": "Relax Office – Góc bình yên giữa giờ",
+  "short_name": "Relax Office",
+  "description": "Thiên nhiên, âm thanh, café ảo, hít thở và trò chơi nhẹ để thư giãn mỗi ngày.",
+  "lang": "vi",
+  "start_url": "./index.html#home",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F4EA",
+  "theme_color": "#3E6B4F",
+  "categories": ["health", "lifestyle", "music"],
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Café ảo + Pomodoro", "url": "./index.html#cafe", "icons": [{"src": "icons/icon-192.png", "sizes": "192x192"}]},
+    {"name": "Hít thở 1 phút", "url": "./index.html#mind", "icons": [{"src": "icons/icon-192.png", "sizes": "192x192"}]}
+  ]
+}
